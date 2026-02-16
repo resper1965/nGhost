@@ -96,7 +96,7 @@ function GabiFullLogo({ variant = 'default' }: { variant?: 'default' | 'light' |
     <div className="flex flex-col items-center">
       <GabiLogo size="xl" variant={variant} />
       <div className={cn('text-xs mt-1', subtextColor)} style={{ fontFamily: 'Montserrat, sans-serif' }}>
-        Ghost Writer • <span style={{ color: ACCENT_COLOR }}>powered by ness.</span>
+        Ghost Writer • <span>powered by <span className={textColor}>ness</span><span style={{ color: ACCENT_COLOR }}>.</span></span>
       </div>
     </div>
   )
@@ -632,7 +632,7 @@ function SidebarContent({
           <div>
             <GabiLogo size="md" variant="default" showIcon={false} />
             <p className="text-[10px] text-muted-foreground" style={{ fontFamily: 'Montserrat, sans-serif' }}>
-              Ghost Writer • <span style={{ color: ACCENT_COLOR }}>ness.</span>
+              Ghost Writer • <span className="text-foreground">ness</span><span style={{ color: ACCENT_COLOR }}>.</span>
             </p>
           </div>
         </div>
