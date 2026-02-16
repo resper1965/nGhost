@@ -1,0 +1,304 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// Enums
+// ============================================
+
+enum DocumentType {
+  style
+  content
+}
+
+enum MessageRole {
+  user
+  assistant
+}
+
+// ============================================
+// User & Authentication
+// ============================================
+
+model User {
+  id            String        @id @default(cuid())
+  name          String?
+  email         String        @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  
+  // OAuth
+  accounts      Account[]
+  sessions      Session[]
+  
+  // App relations
+  projects      Project[]
+  documents     KnowledgeDocument[]
+  chatSessions  ChatSession[]
+  favorites     Favorite[]
+  textVersions  TextVersion[]
+  customTemplates CustomTemplate[]
+  
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  
+  @@index([email])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  
+  @@unique([identifier, token])
+}
+
+// ============================================
+// Projects - Multi-tenant isolation
+// ============================================
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  color       String   @default("#00ade8")
+  icon        String?
+  
+  // Owner
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Relations
+  documents   KnowledgeDocument[]
+  chatSessions ChatSession[]
+  templates   CustomTemplate[]
+  
+  // Project settings
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([isActive])
+}
+
+// ============================================
+// GhostWriter - Vector Knowledge Base System
+// ============================================
+
+/// Knowledge Document - Represents an uploaded document
+/// Can be either 'style' (writing patterns) or 'content' (factual information)
+model KnowledgeDocument {
+  id          String         @id @default(cuid())
+  filename    String         // Original filename
+  type        DocumentType   // 'style' | 'content'
+  fileSize    Int            // File size in bytes
+  mimeType    String         // MIME type
+  chunkCount  Int            @default(0) // Number of chunks extracted
+  summary     String?        // AI-generated summary of the document
+  isActive    Boolean        @default(true)
+  
+  // Owner
+  userId      String?
+  user        User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Project association
+  projectId   String?
+  project     Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  // Relations
+  chunks      DocumentChunk[]
+  
+  @@index([type])
+  @@index([isActive])
+  @@index([userId])
+  @@index([projectId])
+}
+
+/// Document Chunk - Stores text chunks with embeddings for vector search
+/// Each chunk is a semantic unit that can be retrieved independently
+model DocumentChunk {
+  id           String            @id @default(cuid())
+  documentId   String
+  content      String            // The actual text content
+  chunkIndex   Int               // Position in the document
+  embedding    String?           // JSON array of embedding vector
+  keywords     String?           // JSON array of extracted keywords
+  metadata     String?           // JSON object with additional metadata
+  
+  // Relations
+  document     KnowledgeDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  
+  createdAt    DateTime          @default(now())
+  
+  @@index([documentId])
+  @@index([chunkIndex])
+}
+
+/// Chat Session - Represents a conversation session
+model ChatSession {
+  id          String        @id @default(cuid())
+  title       String?       // Optional session title
+  
+  // Owner
+  userId      String?
+  user        User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Project association
+  projectId   String?
+  project     Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  
+  // Relations
+  messages    ChatMessage[]
+  favorites   Favorite[]
+  
+  @@index([createdAt])
+  @@index([userId])
+  @@index([projectId])
+}
+
+/// Chat Message - Individual messages in a chat session
+model ChatMessage {
+  id             String       @id @default(cuid())
+  sessionId      String
+  role           MessageRole  // 'user' | 'assistant'
+  content        String       // Message content
+  
+  // Metadata for ghost writer context
+  styleSources   String?      // JSON array of style chunk IDs used
+  contentSources String?      // JSON array of content chunk IDs used
+  toneInstruction String?     // Tone instruction used for this generation
+  
+  createdAt      DateTime     @default(now())
+  
+  // Relations
+  session        ChatSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  versions       TextVersion[]
+  
+  @@index([sessionId])
+  @@index([createdAt])
+}
+
+/// Text Version - Version history for generated texts
+model TextVersion {
+  id          String       @id @default(cuid())
+  messageId   String
+  content     String       // The text content
+  version     Int          // Version number
+  note        String?      // Optional note about this version
+  
+  // Owner
+  userId      String?
+  user        User?        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime     @default(now())
+  
+  // Relations
+  message     ChatMessage  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  
+  @@unique([messageId, version])
+  @@index([messageId])
+  @@index([userId])
+}
+
+/// Favorite - Saved/favorited texts
+model Favorite {
+  id          String       @id @default(cuid())
+  sessionId   String?
+  title       String       // User-defined title
+  content     String       // The favorited content
+  tags        String?      // JSON array of tags
+  note        String?      // User note
+  
+  // Owner
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Optional link to session
+  session     ChatSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  @@index([userId])
+  @@index([sessionId])
+}
+
+/// Custom Template - User-created writing templates
+model CustomTemplate {
+  id          String   @id @default(cuid())
+  name        String   // Template name
+  description String?  // Template description
+  prompt      String   // The prompt template with variables like {{topic}}
+  category    String?  // Category for grouping (e.g., "Business", "Creative")
+  icon        String?  // Icon name (lucide-react icon)
+  color       String?  // Accent color for the template card
+  variables   String?  // JSON array of variable names: ["topic", "name", "company"]
+  example     String?  // Example of how to use the template
+  isPublic    Boolean  @default(false) // Whether template is shared publicly
+  
+  // Owner
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Project association
+  projectId   String?
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Usage stats
+  useCount    Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([userId])
+  @@index([projectId])
+  @@index([category])
+  @@index([isPublic])
+}

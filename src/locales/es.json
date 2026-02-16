@@ -1,0 +1,118 @@
+{
+  "app": {
+    "name": "nGhost Writer",
+    "version": "1.0.0",
+    "agentName": "Gabi",
+    "tagline": "Tu Ghost Writer de Elite"
+  },
+  "sidebar": {
+    "newChat": "Nueva Conversación",
+    "conversations": "Conversaciones",
+    "style": "Estilo",
+    "content": "Contenido",
+    "styleBase": "Base de Estilo",
+    "contentBase": "Base de Contenido",
+    "noDocuments": "Ningún documento",
+    "dragOrClick": "Arrastra o haz clic",
+    "dropHere": "Suelta aquí",
+    "loadSampleData": "Cargar datos de ejemplo",
+    "loading": "Cargando...",
+    "writingTone": "Tono de escritura"
+  },
+  "tones": {
+    "formal": "Formal y directo",
+    "conversational": "Conversacional y amigable",
+    "academic": "Académico y riguroso",
+    "creative": "Creativo y poético",
+    "journalistic": "Periodístico e informativo",
+    "persuasive": "Persuasivo y convincente"
+  },
+  "chat": {
+    "placeholder": "¿Sobre qué vamos a escribir hoy?",
+    "send": "Enviar",
+    "regenerate": "Regenerar",
+    "copy": "Copiar",
+    "copied": "¡Copiado!",
+    "export": "Exportar",
+    "viewChunks": "Ver contexto",
+    "words": "palabras",
+    "characters": "caracteres",
+    "styleChunks": "estilo",
+    "contentChunks": "contenido"
+  },
+  "templates": {
+    "title": "Elige una Plantilla",
+    "subtitle": "Selecciona el tipo de texto que deseas crear",
+    "email": {
+      "name": "Correo Profesional",
+      "description": "Comunicación corporativa formal"
+    },
+    "article": {
+      "name": "Artículo",
+      "description": "Texto periodístico o blog"
+    },
+    "essay": {
+      "name": "Ensayo",
+      "description": "Texto académico o reflexivo"
+    },
+    "social": {
+      "name": "Post Redes Sociales",
+      "description": "Contenido para Instagram, LinkedIn, etc."
+    },
+    "presentation": {
+      "name": "Presentación",
+      "description": "Diapositivas y discurso"
+    },
+    "letter": {
+      "name": "Carta",
+      "description": "Correspondencia personal o formal"
+    },
+    "faq": {
+      "name": "FAQ",
+      "description": "Preguntas frecuentes"
+    },
+    "report": {
+      "name": "Informe",
+      "description": "Documento técnico o ejecutivo"
+    }
+  },
+  "export": {
+    "txt": "Texto Plano",
+    "md": "Markdown",
+    "html": "HTML",
+    "docx": "Documento Word"
+  },
+  "welcome": {
+    "greeting": "¡Hola! Soy Gabi",
+    "description": "Tu Ghost Writer de élite. Elige una plantilla para empezar o escribe libremente sobre lo que desees.",
+    "seeTemplates": "Ver Plantillas de Escritura",
+    "loadSampleData": "Cargar datos de ejemplo",
+    "features": {
+      "fastStreaming": "Streaming Rápido",
+      "dualRag": "Dual RAG",
+      "multiFormat": "Multi-Formato"
+    }
+  },
+  "context": {
+    "title": "Contexto Utilizado",
+    "subtitle": "Fragmentos que influyeron en la respuesta"
+  },
+  "errors": {
+    "generic": "Lo siento, ocurrió un error. Por favor intenta de nuevo.",
+    "uploadFailed": "Error al subir",
+    "deleteFailed": "Error al eliminar",
+    "exportFailed": "Error al exportar"
+  },
+  "stats": {
+    "documents": "Documentos",
+    "chunks": "Chunks",
+    "words": "Palabras"
+  },
+  "auth": {
+    "signIn": "Iniciar Sesión",
+    "signOut": "Cerrar Sesión",
+    "signInWith": "Iniciar sesión con {provider}",
+    "email": "Correo electrónico",
+    "continueAsGuest": "Continuar como Invitado"
+  }
+}

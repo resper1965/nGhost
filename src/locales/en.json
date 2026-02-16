@@ -1,0 +1,118 @@
+{
+  "app": {
+    "name": "nGhost Writer",
+    "version": "1.0.0",
+    "agentName": "Gabi",
+    "tagline": "Your Elite Ghost Writer"
+  },
+  "sidebar": {
+    "newChat": "New Chat",
+    "conversations": "Conversations",
+    "style": "Style",
+    "content": "Content",
+    "styleBase": "Style Base",
+    "contentBase": "Content Base",
+    "noDocuments": "No documents",
+    "dragOrClick": "Drag or click",
+    "dropHere": "Drop here",
+    "loadSampleData": "Load sample data",
+    "loading": "Loading...",
+    "writingTone": "Writing tone"
+  },
+  "tones": {
+    "formal": "Formal and direct",
+    "conversational": "Conversational and friendly",
+    "academic": "Academic and rigorous",
+    "creative": "Creative and poetic",
+    "journalistic": "Journalistic and informative",
+    "persuasive": "Persuasive and convincing"
+  },
+  "chat": {
+    "placeholder": "What shall we write about today?",
+    "send": "Send",
+    "regenerate": "Regenerate",
+    "copy": "Copy",
+    "copied": "Copied!",
+    "export": "Export",
+    "viewChunks": "View context",
+    "words": "words",
+    "characters": "characters",
+    "styleChunks": "style",
+    "contentChunks": "content"
+  },
+  "templates": {
+    "title": "Choose a Template",
+    "subtitle": "Select the type of text you want to create",
+    "email": {
+      "name": "Professional Email",
+      "description": "Formal corporate communication"
+    },
+    "article": {
+      "name": "Article",
+      "description": "Journalistic or blog text"
+    },
+    "essay": {
+      "name": "Essay",
+      "description": "Academic or reflective text"
+    },
+    "social": {
+      "name": "Social Media Post",
+      "description": "Content for Instagram, LinkedIn, etc."
+    },
+    "presentation": {
+      "name": "Presentation",
+      "description": "Slides and speech"
+    },
+    "letter": {
+      "name": "Letter",
+      "description": "Personal or formal correspondence"
+    },
+    "faq": {
+      "name": "FAQ",
+      "description": "Frequently asked questions"
+    },
+    "report": {
+      "name": "Report",
+      "description": "Technical or executive document"
+    }
+  },
+  "export": {
+    "txt": "Plain Text",
+    "md": "Markdown",
+    "html": "HTML",
+    "docx": "Word Document"
+  },
+  "welcome": {
+    "greeting": "Hi! I'm Gabi",
+    "description": "Your Elite Ghost Writer. Choose a template to start or write freely about whatever you want.",
+    "seeTemplates": "See Writing Templates",
+    "loadSampleData": "Load sample data",
+    "features": {
+      "fastStreaming": "Fast Streaming",
+      "dualRag": "Dual RAG",
+      "multiFormat": "Multi-Format"
+    }
+  },
+  "context": {
+    "title": "Context Used",
+    "subtitle": "Excerpts that influenced the response"
+  },
+  "errors": {
+    "generic": "Sorry, an error occurred. Please try again.",
+    "uploadFailed": "Upload failed",
+    "deleteFailed": "Delete failed",
+    "exportFailed": "Export failed"
+  },
+  "stats": {
+    "documents": "Documents",
+    "chunks": "Chunks",
+    "words": "Words"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "signInWith": "Sign in with {provider}",
+    "email": "Email",
+    "continueAsGuest": "Continue as Guest"
+  }
+}
