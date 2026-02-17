@@ -452,7 +452,7 @@ function EmptyState({ onTemplate, onUpload }: { onTemplate: () => void; onUpload
       </div>
       
       <h2 className="text-xl sm:text-2xl font-semibold text-foreground mb-2 text-center">
-        Olá, sou a Gabi
+        Como posso ajudar?
       </h2>
       <p className="text-sm sm:text-base text-muted-foreground text-center mb-6 sm:mb-8 max-w-md">
         Sua assistente de escrita com IA. Escreva textos no seu estilo único.
@@ -624,7 +624,7 @@ function SidebarContent({
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-md bg-card border border-border">
-              <GabiLogo size="sm" variant="default" showIcon={true} />
+              <PenIcon className="w-4 h-4" color={ACCENT_COLOR} />
             </div>
             <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-background flex items-center justify-center">
               <Zap className="w-1.5 h-1.5 text-white" />
