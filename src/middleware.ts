@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 const PUBLIC_PATHS = [
   '/auth/signin',
   '/auth/error',
+  '/landing',
   '/api/auth',     // Keep for any legacy callbacks
   '/_next',
   '/favicon.ico',
