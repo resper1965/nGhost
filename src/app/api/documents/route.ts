@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { type DocumentType } from '@prisma/client';
 import { db } from '@/lib/db';
 import { chunkText, extractKeywords } from '@/lib/server-utils';
 import { validateFile, validateContent } from '@/lib/utils';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
+import { storeEmbedding } from '@/lib/embeddings';
 
 // GET - List all documents (filtered by project)
 export async function GET(request: NextRequest) {
@@ -14,17 +15,17 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     // Build where clause
     const where: {
-      type?: string;
+      type?: DocumentType;
       projectId?: string | null;
       userId?: string;
     } = {};
 
-    if (type) where.type = type;
+    if (type) where.type = type as DocumentType;
 
     // If authenticated and projectId provided, filter by project
     if (projectId && projectId !== 'all') {
@@ -79,8 +80,8 @@ export async function GET(request: NextRequest) {
 // POST - Upload and ingest a document
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
     const document = await db.knowledgeDocument.create({
       data: {
         filename,
-        type,
+        type: type as DocumentType,
         fileSize,
         mimeType,
         chunkCount: chunks.length,
@@ -174,6 +175,19 @@ export async function POST(request: NextRequest) {
       include: {
         chunks: true
       }
+    });
+
+    // Fire-and-forget: generate embeddings for all chunks in background
+    // This keeps the upload response fast while indexing happens async
+    Promise.all(
+      document.chunks.map(chunk =>
+        storeEmbedding(chunk.id, chunk.content).catch(err =>
+          console.error(`[embeddings] Failed to embed chunk ${chunk.id}:`, err)
+        )
+      )
+    ).then(results => {
+      const indexed = results.filter(Boolean).length;
+      console.log(`[embeddings] Indexed ${indexed}/${document.chunks.length} chunks for ${filename}`);
     });
 
     return NextResponse.json({

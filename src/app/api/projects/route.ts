@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
 
 // GET - List all projects for the current user
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     // If not authenticated, return empty projects (guest mode)
     if (!userId) {
@@ -59,8 +58,8 @@ export async function GET(request: NextRequest) {
 // POST - Create a new project
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     if (!userId) {
       return NextResponse.json(
@@ -121,8 +120,8 @@ export async function POST(request: NextRequest) {
 // PATCH - Update a project
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     if (!userId) {
       return NextResponse.json(
@@ -187,8 +186,8 @@ export async function PATCH(request: NextRequest) {
 // DELETE - Delete a project and all associated data
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     if (!userId) {
       return NextResponse.json(

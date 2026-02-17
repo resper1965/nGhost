@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-
-// Create a fresh Prisma client instance for this route
-const prisma = new PrismaClient({ log: ['error'] });
+import { db } from '@/lib/db';
+import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
 
 // GET - List custom templates (filtered by project)
 export async function GET(request: NextRequest) {
@@ -14,8 +10,8 @@ export async function GET(request: NextRequest) {
     const projectId = searchParams.get('projectId');
     const publicOnly = searchParams.get('public') === 'true';
 
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     // Build where clause
     const where: {
@@ -43,7 +39,7 @@ export async function GET(request: NextRequest) {
       where.category = category;
     }
 
-    const templates = await prisma.customTemplate.findMany({
+    const templates = await db.customTemplate.findMany({
       where,
       orderBy: [
         { useCount: 'desc' },
@@ -78,8 +74,8 @@ export async function GET(request: NextRequest) {
 // POST - Create a custom template
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     const {
       name,
@@ -103,7 +99,7 @@ export async function POST(request: NextRequest) {
 
     // If projectId provided, verify user has access
     if (projectId && userId) {
-      const project = await prisma.project.findFirst({
+      const project = await db.project.findFirst({
         where: { id: projectId, userId }
       });
       if (!project) {
@@ -118,7 +114,7 @@ export async function POST(request: NextRequest) {
       v => v.replace(/\{\{|\}\}/g, '')
     ) || [];
 
-    const template = await prisma.customTemplate.create({
+    const template = await db.customTemplate.create({
       data: {
         name,
         description,
@@ -163,8 +159,8 @@ export async function POST(request: NextRequest) {
 // PATCH - Update a template
 export async function PATCH(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     const {
       id,
@@ -188,7 +184,7 @@ export async function PATCH(request: NextRequest) {
 
     // Verify ownership if authenticated
     if (userId) {
-      const existing = await prisma.customTemplate.findFirst({
+      const existing = await db.customTemplate.findFirst({
         where: { id, userId }
       });
       if (!existing) {
@@ -199,7 +195,7 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    const template = await prisma.customTemplate.update({
+    const template = await db.customTemplate.update({
       where: { id },
       data: {
         name,
@@ -241,8 +237,8 @@ export async function PATCH(request: NextRequest) {
 // DELETE - Delete a template
 export async function DELETE(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
@@ -256,7 +252,7 @@ export async function DELETE(request: NextRequest) {
 
     // Verify ownership if authenticated
     if (userId) {
-      const existing = await prisma.customTemplate.findFirst({
+      const existing = await db.customTemplate.findFirst({
         where: { id, userId }
       });
       if (!existing) {
@@ -267,7 +263,7 @@ export async function DELETE(request: NextRequest) {
       }
     }
 
-    await prisma.customTemplate.delete({
+    await db.customTemplate.delete({
       where: { id }
     });
 

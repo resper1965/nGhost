@@ -232,7 +232,7 @@ function Avatar({ role, size = 'md' }: { role: 'user' | 'assistant'; size?: 'sm'
 
   if (role === 'assistant') {
     return (
-      <div className={cn(sizeClasses[size], 'rounded-xl flex items-center justify-center shadow-md flex-shrink-0 bg-card border border-border')}>
+      <div className={cn(sizeClasses[size], 'rounded-xl flex items-center justify-center shadow-md flex-shrink-0 bg-card border border-border avatar-glow')}>
         <PenIcon className={iconSizes[size]} color={ACCENT_COLOR} />
       </div>
     )
@@ -288,18 +288,17 @@ function MessageBubble({ msg, onShowChunks, onExport, onLike }: {
               'px-4 py-3 sm:px-5 sm:py-4 leading-relaxed whitespace-pre-wrap text-sm sm:text-base',
               msg.role === 'user'
                 ? 'text-white rounded-2xl rounded-tr-md'
-                : 'bg-card text-foreground rounded-2xl rounded-tl-md border border-border shadow-sm'
+                : 'glass-card text-foreground rounded-2xl rounded-tl-md'
             )}
             style={msg.role === 'user' ? { background: ACCENT_GRADIENT } : {}}
           >
             {msg.content}
             {msg.isStreaming && (
-              <motion.span 
-                animate={{ opacity: [1, 0.5] }}
-                transition={{ duration: 0.5, repeat: Infinity }}
-                className="inline-block w-1.5 h-4 ml-1 rounded-sm" 
-                style={{ backgroundColor: ACCENT_COLOR }}
-              />
+              <span className="inline-flex gap-1 ml-2 items-center">
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+                <span className="typing-dot" />
+              </span>
             )}
           </div>
           
@@ -795,7 +794,7 @@ function SidebarContent({
 function TemplateSelector({ onSelect, onClose, customTemplates, onManageTemplates }: { 
   onSelect: (template: typeof WRITING_TEMPLATES[0]) => void; 
   onClose: () => void;
-  customTemplates: typeof WRITING_TEMPLATES[];
+  customTemplates: Array<typeof WRITING_TEMPLATES[number]>;
   onManageTemplates: () => void;
 }) {
   const allTemplates = [...WRITING_TEMPLATES, ...customTemplates]
@@ -1026,7 +1025,7 @@ export default function GhostWriterApp() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showTemplateManager, setShowTemplateManager] = useState(false)
-  const [customTemplates, setCustomTemplates] = useState<typeof WRITING_TEMPLATES[]>([])
+  const [customTemplates, setCustomTemplates] = useState<Array<typeof WRITING_TEMPLATES[number]>>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [currentProject, setCurrentProject] = useState<Project | null>(null)
   const [showProjectModal, setShowProjectModal] = useState(false)
@@ -1616,7 +1615,7 @@ export default function GhostWriterApp() {
                   onKeyDown={handleKeyDown}
                   placeholder="Digite sua mensagem..."
                   rows={1}
-                  className="w-full px-4 py-2.5 sm:py-3 pr-12 rounded-xl border border-border bg-background text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-transparent text-sm sm:text-base"
+                  className="w-full px-4 py-2.5 sm:py-3 pr-12 rounded-xl glass-input text-foreground placeholder:text-muted-foreground resize-none focus:outline-none text-sm sm:text-base"
                   style={{ minHeight: '44px', maxHeight: '120px' }}
                 />
               </div>

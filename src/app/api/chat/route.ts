@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getZAI, keywordSearch } from '@/lib/server-utils';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { hybridSearch } from '@/lib/server-utils';
+import { generateText } from '@/lib/vertex-ai';
+import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
 
 // GET - List chat sessions (filtered by project)
 export async function GET(request: NextRequest) {
@@ -10,8 +10,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');
 
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     // Build where clause
     const where: {
@@ -63,10 +63,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { message, sessionId, toneInstruction = 'Formal e direto', projectId } = body;
+    const { message, sessionId, toneInstruction = 'Formal e direto', projectId, styleProfileId, knowledgeProjectIds } = body;
 
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     if (!message?.trim()) {
       return NextResponse.json(
@@ -88,39 +88,46 @@ export async function POST(request: NextRequest) {
       chatSession = await db.chatSession.create({
         data: {
           userId: userId || null,
-          projectId: projectId || null
+          projectId: projectId || null,
+          styleProfileId: styleProfileId || null,
+          knowledgeProjectIds: knowledgeProjectIds ? JSON.stringify(knowledgeProjectIds) : null,
         },
         include: { messages: true }
       });
     }
 
-    // 2. Retrieve relevant chunks using fast keyword search
-    // Filter by project if provided
-    const documentWhere: {
-      isActive: boolean;
-      projectId?: string | null;
-    } = { isActive: true };
-
-    if (projectId && projectId !== 'all') {
-      documentWhere.projectId = projectId;
+    // 2. Retrieve relevant chunks
+    const kbProjectIds: string[] = knowledgeProjectIds || (projectId && projectId !== 'all' ? [projectId] : []);
+    
+    const contentWhere: { isActive: boolean; projectId?: { in: string[] } } = { isActive: true };
+    if (kbProjectIds.length > 0) {
+      contentWhere.projectId = { in: kbProjectIds };
     }
 
-    const [styleChunks, contentChunks] = await Promise.all([
-      db.documentChunk.findMany({
-        where: { document: { type: 'style', ...documentWhere } },
-        select: { id: true, content: true, keywords: true }
-      }),
-      db.documentChunk.findMany({
-        where: { document: { type: 'content', ...documentWhere } },
-        select: { id: true, content: true, keywords: true }
-      })
-    ]);
-
-    const styleContext = keywordSearch(message, styleChunks, 2);
-    const contentContext = keywordSearch(message, contentChunks, 4);
-
-    const styleText = styleContext.map(c => c.content).join('\n\n---\n\n');
+    // 2a. Content chunks from selected KB projects
+    const contentChunks = await db.documentChunk.findMany({
+      where: { document: { type: 'content', ...contentWhere } },
+      select: { id: true, content: true, keywords: true, embedding: true }
+    });
+    const contentContext = await hybridSearch(message, contentChunks, 4);
     const contentText = contentContext.map(c => c.content).join('\n\n---\n\n');
+
+    // 2b. Style — prefer StyleProfile's systemPrompt
+    let stylePrompt = '';
+    if (styleProfileId) {
+      const profile = await db.styleProfile.findUnique({ where: { id: styleProfileId } });
+      if (profile?.systemPrompt) {
+        stylePrompt = profile.systemPrompt;
+      }
+    }
+    if (!stylePrompt) {
+      const styleChunks = await db.documentChunk.findMany({
+        where: { document: { type: 'style', isActive: true, ...(projectId && projectId !== 'all' ? { projectId } : {}) } },
+        select: { id: true, content: true, keywords: true, embedding: true }
+      });
+      const styleContext = await hybridSearch(message, styleChunks, 2);
+      stylePrompt = styleContext.map(c => c.content).join('\n\n---\n\n') || 'Nenhum estilo de referência fornecido. Use um estilo profissional e claro.';
+    }
 
     // 3. Build the Ghost Writer prompt
     const systemPrompt = `Você é a Gabi, uma Ghost Writer de elite. Seu nome é Gabi e você é uma assistente de escrita altamente qualificada.
@@ -141,17 +148,14 @@ Escreva uma resposta para: "${message}"
 ${contentText || 'Nenhuma informação específica fornecida. Use conhecimento geral quando apropriado.'}
 
 ### REFERÊNCIA DE ESTILO (FORMA)
-${styleText || 'Nenhum estilo de referência fornecido. Use um estilo profissional e claro.'}
+${stylePrompt}
 
 ### INSTRUÇÃO ADICIONAL DE TOM
 ${toneInstruction}
 
 Resposta:`;
 
-    // 4. Generate response with LLM
-    const zai = await getZAI();
-
-    // Build conversation history
+    // 4. Build conversation history for Vertex AI
     const messages: Array<{ role: 'assistant' | 'user'; content: string }> = [
       { role: 'assistant', content: systemPrompt }
     ];
@@ -167,12 +171,7 @@ Resposta:`;
 
     messages.push({ role: 'user', content: userPrompt });
 
-    const completion = await zai.chat.completions.create({
-      messages,
-      thinking: { type: 'disabled' }
-    });
-
-    const aiResponse = completion.choices[0]?.message?.content || 'Desculpe, não consegui gerar uma resposta.';
+    const aiResponse = await generateText(messages) || 'Desculpe, não consegui gerar uma resposta.';
 
     // 5. Save user message
     await db.chatMessage.create({
@@ -182,7 +181,7 @@ Resposta:`;
         content: message,
         toneInstruction,
         contentSources: JSON.stringify(contentContext.map(c => c.id)),
-        styleSources: JSON.stringify(styleContext.map(c => c.id))
+        styleSources: styleProfileId || null
       }
     });
 
@@ -212,7 +211,7 @@ Resposta:`;
       response: aiResponse,
       sessionId: chatSession.id,
       context: {
-        styleChunks: styleContext.length,
+        styleSource: styleProfileId || 'chunks',
         contentChunks: contentContext.length
       }
     });
@@ -231,8 +230,8 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
 
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     if (sessionId) {
       // Verify ownership if authenticated

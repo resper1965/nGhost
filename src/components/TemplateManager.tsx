@@ -246,17 +246,16 @@ export function TemplateManager({ isOpen, onClose, onSelectTemplate }: TemplateM
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
-                              <span className="text-lg">{template.icon && iconMap[template.icon] ? 
-                                (iconMap[template.icon] === Sparkles ? <Sparkles className="w-5 h-5" style={{ color: template.color }} /> : 
-                                 iconMap[template.icon] === FileText ? <FileText className="w-5 h-5" style={{ color: template.color }} /> :
-                                 iconMap[template.icon]()) : 
-                                <FileText className="w-5 h-5" style={{ color: template.color }} />
-                              }</span>
+                              <span className="text-lg">{(() => {
+                                const IconComponent = template.icon ? iconMap[template.icon] : null;
+                                if (!IconComponent) return <FileText className="w-5 h-5" style={{ color: template.color }} />;
+                                return <IconComponent className="w-5 h-5" style={{ color: template.color }} />;
+                              })()}</span>
                               <h4 className="font-semibold text-gray-900">{template.name}</h4>
                               {template.isPublic ? (
-                                <Globe className="w-3 h-3 text-green-500" title="Público" />
+                                <Globe className="w-3 h-3 text-green-500" />
                               ) : (
-                                <Lock className="w-3 h-3 text-gray-400" title="Privado" />
+                                <Lock className="w-3 h-3 text-gray-400" />
                               )}
                             </div>
                             {template.description && (

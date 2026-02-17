@@ -134,7 +134,7 @@ ${escapedContent.split('\n\n').map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).jo
 
       const buffer = await Packer.toBuffer(doc)
 
-      return new NextResponse(buffer, {
+      return new NextResponse(new Uint8Array(buffer), {
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'Content-Disposition': `attachment; filename="${safeFilename}.docx"`

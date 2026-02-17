@@ -1,57 +1,29 @@
-import ZAI from 'z-ai-web-dev-sdk'
 import { db } from '@/lib/db'
+import { generateEmbedding as vertexGenerateEmbedding } from '@/lib/vertex-ai'
+import { Prisma } from '@prisma/client'
 
 // ============================================
 // Embedding Cache (in-memory for development)
-// In production, use Redis or database storage
 // ============================================
 
 const embeddingCache = new Map<string, number[]>()
 
 // ============================================
-// ZAI Instance for Embeddings
-// ============================================
-
-let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null
-let zaiPromise: Promise<Awaited<ReturnType<typeof ZAI.create>>> | null = null
-
-async function getZAI() {
-  if (!zaiInstance && !zaiPromise) {
-    zaiPromise = ZAI.create().then(instance => {
-      zaiInstance = instance
-      return instance
-    })
-  }
-  return zaiPromise || zaiInstance!
-}
-
-// ============================================
-// Embedding Functions
+// Embedding Functions (Vertex AI + pgvector)
 // ============================================
 
 /**
- * Generate embedding for a text
+ * Generate embedding for a text using Vertex AI
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
-  // Check cache first
-  const cacheKey = text.slice(0, 100) // Simple cache key
+  const cacheKey = text.slice(0, 100)
   if (embeddingCache.has(cacheKey)) {
     return embeddingCache.get(cacheKey)!
   }
   
-  const zai = await getZAI()
-  
   try {
-    // Use z-ai-sdk for embeddings
-    // Note: The actual embedding API might differ - adjust based on SDK
-    const response = await zai.embeddings.create({
-      input: text.slice(0, 8000), // Limit text length
-      model: 'text-embedding-3-small'
-    })
+    const embedding = await vertexGenerateEmbedding(text)
     
-    const embedding = response.data[0]?.embedding || []
-    
-    // Cache the result
     if (embedding.length > 0) {
       embeddingCache.set(cacheKey, embedding)
     }
@@ -64,7 +36,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 }
 
 /**
- * Calculate cosine similarity between two vectors
+ * Calculate cosine similarity between two vectors (fallback for non-pgvector)
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return 0
@@ -85,57 +57,84 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 }
 
 /**
- * Vector similarity search for document chunks
+ * Format embedding array as pgvector string: [0.1,0.2,0.3]
+ */
+function toPgVector(embedding: number[]): string {
+  return `[${embedding.join(',')}]`
+}
+
+/**
+ * Native pgvector similarity search for document chunks
+ * Uses cosine distance operator <=> for fast indexed search
  */
 export async function vectorSearch(
   query: string,
   type: 'style' | 'content',
-  topK: number = 4
+  topK: number = 4,
+  projectIds?: string[]
 ): Promise<{ id: string; content: string; score: number }[]> {
-  // Generate embedding for query
   const queryEmbedding = await generateEmbedding(query)
   
   if (queryEmbedding.length === 0) {
-    // Fallback to keyword search if embeddings fail
     return []
   }
-  
-  // Get all chunks of the specified type
+
+  const pgVector = toPgVector(queryEmbedding)
+
+  try {
+    // Build project filter
+    let projectFilter = Prisma.empty
+    if (projectIds && projectIds.length > 0) {
+      projectFilter = Prisma.sql`AND kd."projectId" IN (${Prisma.join(projectIds)})`
+    }
+
+    const results = await db.$queryRaw<Array<{ id: string; content: string; score: number }>>`
+      SELECT dc.id, dc.content, 1 - (dc.embedding::vector <=> ${pgVector}::vector) as score
+      FROM "DocumentChunk" dc
+      INNER JOIN "KnowledgeDocument" kd ON dc."documentId" = kd.id
+      WHERE kd.type = ${type}
+        AND kd."isActive" = true
+        AND dc.embedding IS NOT NULL
+        ${projectFilter}
+      ORDER BY dc.embedding::vector <=> ${pgVector}::vector
+      LIMIT ${topK}
+    `
+
+    return results
+  } catch (error) {
+    console.error('[pgvector] Vector search failed, falling back to in-memory:', error)
+    // Fallback to in-memory search if pgvector not available
+    return vectorSearchFallback(queryEmbedding, type, topK)
+  }
+}
+
+/**
+ * Fallback in-memory vector search (for dev without pgvector)
+ */
+async function vectorSearchFallback(
+  queryEmbedding: number[],
+  type: 'style' | 'content',
+  topK: number
+): Promise<{ id: string; content: string; score: number }[]> {
   const chunks = await db.documentChunk.findMany({
     where: {
-      document: {
-        type,
-        isActive: true
-      }
+      document: { type, isActive: true }
     },
-    select: {
-      id: true,
-      content: true,
-      embedding: true
-    }
+    select: { id: true, content: true, embedding: true }
   })
   
-  // Calculate similarity for each chunk
-  const scored = chunks.map(chunk => {
-    let score = 0
-    
-    if (chunk.embedding) {
+  const scored = chunks
+    .filter(chunk => chunk.embedding)
+    .map(chunk => {
       try {
-        const chunkEmbedding = JSON.parse(chunk.embedding)
-        score = cosineSimilarity(queryEmbedding, chunkEmbedding)
+        const chunkEmbedding = JSON.parse(chunk.embedding!)
+        const score = cosineSimilarity(queryEmbedding, chunkEmbedding)
+        return { id: chunk.id, content: chunk.content, score }
       } catch {
-        score = 0
+        return { id: chunk.id, content: chunk.content, score: 0 }
       }
-    }
-    
-    return {
-      id: chunk.id,
-      content: chunk.content,
-      score
-    }
-  })
+    })
   
-  // Sort by score and return top K
   return scored
     .filter(c => c.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -143,21 +142,23 @@ export async function vectorSearch(
 }
 
 /**
- * Store embedding for a chunk
+ * Store embedding for a chunk (pgvector-compatible format)
  */
 export async function storeEmbedding(chunkId: string, text: string): Promise<void> {
   const embedding = await generateEmbedding(text)
   
   if (embedding.length > 0) {
+    // Store as pgvector-compatible string format: [0.1,0.2,...]
+    const pgVector = toPgVector(embedding)
     await db.documentChunk.update({
       where: { id: chunkId },
-      data: { embedding: JSON.stringify(embedding) }
+      data: { embedding: pgVector }
     })
   }
 }
 
 /**
- * Batch generate and store embeddings for all chunks
+ * Batch generate and store embeddings for all chunks without embeddings
  */
 export async function indexAllChunks(): Promise<{ indexed: number; errors: number }> {
   const chunks = await db.documentChunk.findMany({

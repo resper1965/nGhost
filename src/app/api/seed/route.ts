@@ -126,7 +126,7 @@ COLONIZAÇÃO:
 export async function POST(request: NextRequest) {
   try {
     const allSamples = [...styleSamples, ...contentSamples];
-    const results = [];
+    const results: Array<{ filename: string; type?: string; status: string; reason?: string; chunks?: number }> = [];
 
     for (const sample of allSamples) {
       // Check if document already exists

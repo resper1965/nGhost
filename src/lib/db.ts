@@ -7,7 +7,7 @@ const globalForPrisma = globalThis as unknown as {
 // Disable query logging in production for better performance
 const logOptions = process.env.NODE_ENV === 'production' 
   ? [] 
-  : ['error', 'warn'] as const
+  : ['error', 'warn'] as Array<'error' | 'warn'>
 
 // Create Prisma Client
 // In development, we use a cached instance to avoid creating too many connections

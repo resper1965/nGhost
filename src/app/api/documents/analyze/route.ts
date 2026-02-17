@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getZAI } from '@/lib/server-utils';
+import { generateText } from '@/lib/vertex-ai';
 
 // POST - Analyze writing style of a document
 export async function POST(request: NextRequest) {
@@ -42,14 +42,11 @@ export async function POST(request: NextRequest) {
     // Combine sample chunks for analysis
     const sampleText = document.chunks.map(c => c.content).join('\n\n---\n\n');
 
-    const zai = await getZAI();
-
-    // Analyze style with LLM
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'assistant',
-          content: `Você é um especialista em análise de estilo literário. Analise o texto fornecido e extraia características de estilo.
+    // Analyze style with Vertex AI
+    const responseText = await generateText([
+      {
+        role: 'assistant',
+        content: `Você é um especialista em análise de estilo literário. Analise o texto fornecido e extraia características de estilo.
 
 Responda APENAS com um JSON válido no seguinte formato:
 {
@@ -65,16 +62,12 @@ Responda APENAS com um JSON válido no seguinte formato:
   "punctuationStyle": "descrição do uso de pontuação",
   "rhythm": "descrição do ritmo da escrita"
 }`
-        },
-        {
-          role: 'user',
-          content: `Analise o estilo de escrita do seguinte texto:\n\n${sampleText}`
-        }
-      ],
-      thinking: { type: 'disabled' }
-    });
-
-    const responseText = completion.choices[0]?.message?.content || '';
+      },
+      {
+        role: 'user',
+        content: `Analise o estilo de escrita do seguinte texto:\n\n${sampleText}`
+      }
+    ]);
     
     let analysis;
     try {

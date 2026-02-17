@@ -1,17 +1,17 @@
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
-import { getZAI, keywordSearch } from '@/lib/server-utils';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { hybridSearch } from '@/lib/server-utils';
+import { streamText } from '@/lib/vertex-ai';
+import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
 
 // POST - Stream ghost-written content
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { message, sessionId, toneInstruction = 'Formal e direto', projectId } = body;
+    const { message, sessionId, toneInstruction = 'Formal e direto', projectId, styleProfileId, knowledgeProjectIds } = body;
 
-    const session = await getServerSession(authOptions);
-    const userId = session?.user?.id;
+    const firebaseUser = await getFirebaseUser(request);
+    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
 
     if (!message?.trim()) {
       return new Response(JSON.stringify({ error: 'Message is required' }), {
@@ -33,39 +33,49 @@ export async function POST(request: NextRequest) {
       chatSession = await db.chatSession.create({
         data: {
           userId: userId || null,
-          projectId: projectId || null
+          projectId: projectId || null,
+          styleProfileId: styleProfileId || null,
+          knowledgeProjectIds: knowledgeProjectIds ? JSON.stringify(knowledgeProjectIds) : null,
         },
         include: { messages: true }
       });
     }
 
-    // 2. Retrieve relevant chunks using fast keyword search
-    // Filter by project if provided
-    const documentWhere: {
-      isActive: boolean;
-      projectId?: string | null;
-    } = { isActive: true };
-
-    if (projectId && projectId !== 'all') {
-      documentWhere.projectId = projectId;
+    // 2. Retrieve relevant chunks
+    // Determine which projects to source KB from
+    const kbProjectIds: string[] = knowledgeProjectIds || (projectId && projectId !== 'all' ? [projectId] : []);
+    
+    const contentWhere: { isActive: boolean; projectId?: { in: string[] } } = { isActive: true };
+    if (kbProjectIds.length > 0) {
+      contentWhere.projectId = { in: kbProjectIds };
     }
 
-    const [styleChunks, contentChunks] = await Promise.all([
-      db.documentChunk.findMany({
-        where: { document: { type: 'style', ...documentWhere } },
-        select: { id: true, content: true, keywords: true }
-      }),
-      db.documentChunk.findMany({
-        where: { document: { type: 'content', ...documentWhere } },
-        select: { id: true, content: true, keywords: true }
-      })
-    ]);
-
-    const styleContext = keywordSearch(message, styleChunks, 2);
-    const contentContext = keywordSearch(message, contentChunks, 4);
-
-    const styleText = styleContext.map(c => c.content).join('\n\n---\n\n');
+    // 2a. Get content chunks from selected KB projects
+    const contentChunks = await db.documentChunk.findMany({
+      where: { document: { type: 'content', ...contentWhere } },
+      select: { id: true, content: true, keywords: true, embedding: true }
+    });
+    const contentContext = await hybridSearch(message, contentChunks, 4);
     const contentText = contentContext.map(c => c.content).join('\n\n---\n\n');
+
+    // 2b. Get style — prefer StyleProfile's systemPrompt over raw style docs
+    let stylePrompt = '';
+    if (styleProfileId) {
+      const profile = await db.styleProfile.findUnique({ where: { id: styleProfileId } });
+      if (profile?.systemPrompt) {
+        stylePrompt = profile.systemPrompt;
+      }
+    }
+
+    // Fallback: search style docs if no profile prompt
+    if (!stylePrompt) {
+      const styleChunks = await db.documentChunk.findMany({
+        where: { document: { type: 'style', isActive: true, ...(projectId && projectId !== 'all' ? { projectId } : {}) } },
+        select: { id: true, content: true, keywords: true, embedding: true }
+      });
+      const styleContext = await hybridSearch(message, styleChunks, 2);
+      stylePrompt = styleContext.map(c => c.content).join('\n\n---\n\n') || 'Nenhum estilo de referência fornecido. Use um estilo profissional e claro.';
+    }
 
     // 3. Build the Ghost Writer prompt
     const systemPrompt = `Você é a Gabi, uma Ghost Writer de elite. Seu nome é Gabi e você é uma assistente de escrita altamente qualificada.
@@ -86,7 +96,7 @@ Escreva uma resposta para: "${message}"
 ${contentText || 'Nenhuma informação específica fornecida. Use conhecimento geral quando apropriado.'}
 
 ### REFERÊNCIA DE ESTILO (FORMA)
-${styleText || 'Nenhum estilo de referência fornecido. Use um estilo profissional e claro.'}
+${stylePrompt}
 
 ### INSTRUÇÃO ADICIONAL DE TOM
 ${toneInstruction}
@@ -94,8 +104,6 @@ ${toneInstruction}
 Resposta:`;
 
     // 4. Create streaming response
-    const zai = await getZAI();
-
     // Build conversation history
     const messages: Array<{ role: 'assistant' | 'user'; content: string }> = [
       { role: 'assistant', content: systemPrompt }
@@ -125,22 +133,16 @@ Resposta:`;
           // Send context info
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({
             type: 'context',
-            styleChunks: styleContext.length,
+            styleSource: styleProfileId || 'chunks',
             contentChunks: contentContext.length,
-            styleSources: styleContext.map(c => c.id),
             contentSources: contentContext.map(c => c.id)
           })}\n\n`));
 
-          // Get completion with streaming
-          const completion = await zai.chat.completions.create({
-            messages,
-            stream: true,
-            thinking: { type: 'disabled' }
-          });
+          // Get streaming completion from Vertex AI
+          const stream = streamText(messages);
 
           // Stream tokens
-          for await (const chunk of completion) {
-            const content = chunk.choices?.[0]?.delta?.content || '';
+          for await (const content of stream) {
             if (content) {
               fullResponse += content;
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'token', content })}\n\n`));
@@ -155,7 +157,7 @@ Resposta:`;
               content: message,
               toneInstruction,
               contentSources: JSON.stringify(contentContext.map(c => c.id)),
-              styleSources: JSON.stringify(styleContext.map(c => c.id))
+              styleSources: styleProfileId || null
             }
           });
 

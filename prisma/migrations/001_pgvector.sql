@@ -1,0 +1,12 @@
+-- Enable pgvector extension
+CREATE EXTENSION IF NOT EXISTS vector;
+-- After Prisma creates the schema, cast the embedding column to vector type:
+-- ALTER TABLE "DocumentChunk" ALTER COLUMN embedding TYPE vector(768) USING embedding::vector;
+-- 
+-- Create IVFFlat index for fast approximate nearest neighbor search:
+-- CREATE INDEX idx_chunk_embedding ON "DocumentChunk" 
+--   USING ivfflat (embedding vector_cosine_ops)
+--   WITH (lists = 100);
+--
+-- NOTE: Run these manually after prisma db push and after you have some data.
+-- IVFFlat index requires existing data to build the index properly.
