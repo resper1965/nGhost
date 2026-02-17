@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
+import { requireAuth } from '@/lib/auth-firebase';
 
 // GET - List custom templates (filtered by project)
 export async function GET(request: NextRequest) {
@@ -10,8 +10,9 @@ export async function GET(request: NextRequest) {
     const projectId = searchParams.get('projectId');
     const publicOnly = searchParams.get('public') === 'true';
 
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
 
     // Build where clause
     const where: {
@@ -74,8 +75,9 @@ export async function GET(request: NextRequest) {
 // POST - Create a custom template
 export async function POST(request: NextRequest) {
   try {
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
 
     const {
       name,
@@ -159,8 +161,9 @@ export async function POST(request: NextRequest) {
 // PATCH - Update a template
 export async function PATCH(request: NextRequest) {
   try {
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
 
     const {
       id,
@@ -237,8 +240,9 @@ export async function PATCH(request: NextRequest) {
 // DELETE - Delete a template
 export async function DELETE(request: NextRequest) {
   try {
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

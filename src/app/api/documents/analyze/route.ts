@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { generateText } from '@/lib/vertex-ai';
+import { requireAuth } from '@/lib/auth-firebase';
 
 // POST - Analyze writing style of a document
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+
     const { documentId } = await request.json();
 
     if (!documentId) {

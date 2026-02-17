@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { hybridSearch } from '@/lib/server-utils';
 import { generateText } from '@/lib/vertex-ai';
-import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
+import { requireAuth } from '@/lib/auth-firebase';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // GET - List chat sessions (filtered by project)
 export async function GET(request: NextRequest) {
@@ -10,8 +11,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');
 
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
 
     // Build where clause
     const where: {
@@ -65,8 +67,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { message, sessionId, toneInstruction = 'Formal e direto', projectId, styleProfileId, knowledgeProjectIds } = body;
 
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
+
+    // Rate limit per user
+    if (!checkRateLimit(userId)) {
+      return NextResponse.json(
+        { success: false, error: 'Muitas requisições. Tente novamente em alguns segundos.' },
+        { status: 429 }
+      );
+    }
 
     if (!message?.trim()) {
       return NextResponse.json(
@@ -230,8 +241,9 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
 
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
 
     if (sessionId) {
       // Verify ownership if authenticated

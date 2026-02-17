@@ -118,8 +118,9 @@ export function keywordSearch(
 }
 
 /**
- * Hybrid search combining keyword matching (30%) with vector similarity (70%)
- * Falls back to keyword-only when embeddings are not available
+ * Hybrid search combining keyword matching (30%) with native pgvector similarity (70%)
+ * Uses SQL `<=>` cosine distance operator for vector search instead of loading all into memory.
+ * Falls back to keyword-only when embeddings are not available.
  */
 export async function hybridSearch(
   query: string,
@@ -128,35 +129,39 @@ export async function hybridSearch(
 ): Promise<ScoredChunk[]> {
   if (chunks.length === 0) return []
 
-  // Step 1: Get keyword scores
+  // Step 1: Get keyword scores (always works)
   const keywordResults = keywordSearch(query, chunks, chunks.length)
   const keywordScoreMap = new Map(keywordResults.map(r => [r.id, r.score]))
   const maxKeywordScore = Math.max(...keywordResults.map(r => r.score), 1)
 
-  // Step 2: Try vector search
+  // Step 2: Try native pgvector search via SQL
   let vectorScoreMap = new Map<string, number>()
   let hasEmbeddings = false
 
   try {
-    // Check if any chunks have embeddings
-    const chunksWithEmbeddings = chunks.filter(c => c.embedding)
-    
-    if (chunksWithEmbeddings.length > 0) {
-      // Dynamic import to avoid circular dependencies
-      const { generateEmbedding, cosineSimilarity } = await import('@/lib/embeddings')
-      const queryEmbedding = await generateEmbedding(query)
+    const { generateEmbedding } = await import('@/lib/embeddings')
+    const { db } = await import('@/lib/db')
+    const queryEmbedding = await generateEmbedding(query)
 
-      if (queryEmbedding.length > 0) {
+    if (queryEmbedding.length > 0) {
+      const chunkIds = chunks.map(c => c.id)
+      const embeddingStr = `[${queryEmbedding.join(',')}]`
+
+      // Native pgvector cosine distance query
+      const vectorResults = await db.$queryRaw<{ id: string; distance: number }[]>`
+        SELECT id, embedding::vector <=> ${embeddingStr}::vector AS distance
+        FROM "DocumentChunk"
+        WHERE id = ANY(${chunkIds})
+        AND embedding IS NOT NULL
+        ORDER BY distance ASC
+        LIMIT ${topK * 2}
+      `
+
+      if (vectorResults.length > 0) {
         hasEmbeddings = true
-        for (const chunk of chunksWithEmbeddings) {
-          try {
-            // Supports both pgvector format [0.1,0.2] and legacy JSON
-            const chunkEmbedding = JSON.parse(chunk.embedding!)
-            const score = cosineSimilarity(queryEmbedding, chunkEmbedding)
-            vectorScoreMap.set(chunk.id, score)
-          } catch {
-            // Skip chunks with invalid embeddings
-          }
+        for (const r of vectorResults) {
+          // Convert distance (0=identical, 2=opposite) to similarity (1=identical, 0=opposite)
+          vectorScoreMap.set(r.id, 1 - (r.distance / 2))
         }
       }
     }
@@ -187,3 +192,4 @@ export async function hybridSearch(
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)
 }
+

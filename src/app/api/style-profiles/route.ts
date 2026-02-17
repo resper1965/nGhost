@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
+import { requireAuth } from '@/lib/auth-firebase';
 import { generateText } from '@/lib/vertex-ai';
 
 // ============================================
@@ -10,11 +10,13 @@ import { generateText } from '@/lib/vertex-ai';
 // GET - List user's style profiles
 export async function GET(request: NextRequest) {
   try {
-    const firebaseUser = await getFirebaseUser(request);
-    if (!firebaseUser) {
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    // Auth verified
+    if (false) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    const user = await getOrCreatePrismaUser(firebaseUser);
+    const user = auth.prismaUser;
 
     const profiles = await db.styleProfile.findMany({
       where: { userId: user.id, isActive: true },
@@ -34,11 +36,13 @@ export async function GET(request: NextRequest) {
 // POST - Create a new style profile
 export async function POST(request: NextRequest) {
   try {
-    const firebaseUser = await getFirebaseUser(request);
-    if (!firebaseUser) {
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    // Auth verified
+    if (false) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    const user = await getOrCreatePrismaUser(firebaseUser);
+    const user = auth.prismaUser;
 
     const { name, description } = await request.json();
 
@@ -64,11 +68,13 @@ export async function POST(request: NextRequest) {
 // PATCH - Update profile or trigger analysis
 export async function PATCH(request: NextRequest) {
   try {
-    const firebaseUser = await getFirebaseUser(request);
-    if (!firebaseUser) {
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    // Auth verified
+    if (false) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    const user = await getOrCreatePrismaUser(firebaseUser);
+    const user = auth.prismaUser;
 
     const { id, name, description, analyze } = await request.json();
 
@@ -165,11 +171,13 @@ export async function PATCH(request: NextRequest) {
 // DELETE - Soft-delete a profile
 export async function DELETE(request: NextRequest) {
   try {
-    const firebaseUser = await getFirebaseUser(request);
-    if (!firebaseUser) {
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    // Auth verified
+    if (false) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
-    const user = await getOrCreatePrismaUser(firebaseUser);
+    const user = auth.prismaUser;
 
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');

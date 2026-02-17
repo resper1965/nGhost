@@ -32,6 +32,13 @@ export function middleware(request: NextRequest) {
   // Check for session cookie
   const sessionCookie = request.cookies.get('__session')
 
+  // Root path: redirect to landing page if not authenticated
+  if (pathname === '/') {
+    if (!sessionCookie?.value) {
+      return NextResponse.redirect(new URL('/landing', request.url))
+    }
+  }
+
   if (!sessionCookie?.value) {
     // No session — redirect to sign in
     const signInUrl = new URL('/auth/signin', request.url)

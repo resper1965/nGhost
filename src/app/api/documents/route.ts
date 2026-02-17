@@ -3,7 +3,7 @@ import { type DocumentType } from '@prisma/client';
 import { db } from '@/lib/db';
 import { chunkText, extractKeywords } from '@/lib/server-utils';
 import { validateFile, validateContent } from '@/lib/utils';
-import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
+import { requireAuth } from '@/lib/auth-firebase';
 import { storeEmbedding } from '@/lib/embeddings';
 
 // GET - List all documents (filtered by project)
@@ -15,8 +15,9 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
 
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
 
     // Build where clause
     const where: {
@@ -80,8 +81,9 @@ export async function GET(request: NextRequest) {
 // POST - Upload and ingest a document
 export async function POST(request: NextRequest) {
   try {
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
 
     const formData = await request.formData();
     const file = formData.get('file') as File | null;

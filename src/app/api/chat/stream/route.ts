@@ -2,7 +2,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
 import { hybridSearch } from '@/lib/server-utils';
 import { streamText } from '@/lib/vertex-ai';
-import { getFirebaseUser, getOrCreatePrismaUser } from '@/lib/auth-firebase';
+import { requireAuth } from '@/lib/auth-firebase';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // POST - Stream ghost-written content
 export async function POST(request: NextRequest) {
@@ -10,8 +11,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { message, sessionId, toneInstruction = 'Formal e direto', projectId, styleProfileId, knowledgeProjectIds } = body;
 
-    const firebaseUser = await getFirebaseUser(request);
-    const userId = firebaseUser ? (await getOrCreatePrismaUser(firebaseUser)).id : null;
+    const auth = await requireAuth(request);
+    if (auth instanceof Response) return auth;
+    const userId = auth.prismaUser.id;
+
+    // Rate limit per user
+    if (!checkRateLimit(userId)) {
+      return new Response(JSON.stringify({ error: 'Muitas requisições. Tente novamente em alguns segundos.' }), {
+        status: 429, headers: { 'Content-Type': 'application/json' }
+      });
+    }
 
     if (!message?.trim()) {
       return new Response(JSON.stringify({ error: 'Message is required' }), {

@@ -52,6 +52,31 @@ export async function getFirebaseUser(request: Request): Promise<FirebaseUser | 
 }
 
 /**
+ * Require authentication — returns user or 401 Response.
+ * Use in API routes to block unauthenticated access.
+ * 
+ * Usage:
+ * ```ts
+ * const auth = await requireAuth(request)
+ * if (auth instanceof Response) return auth
+ * const { firebaseUser, prismaUser } = auth
+ * ```
+ */
+export async function requireAuth(request: Request): Promise<
+  { firebaseUser: FirebaseUser; prismaUser: Awaited<ReturnType<typeof getOrCreatePrismaUser>> } | Response
+> {
+  const firebaseUser = await getFirebaseUser(request)
+  if (!firebaseUser) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  const prismaUser = await getOrCreatePrismaUser(firebaseUser)
+  return { firebaseUser, prismaUser }
+}
+
+/**
  * Find or create a Prisma User from a Firebase user.
  * Uses Firebase UID as the lookup key (stored in User.id).
  * If user exists but has a different ID (legacy NextAuth), 
