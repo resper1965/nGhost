@@ -23,6 +23,7 @@ import { TemplateManager } from '@/components/TemplateManager'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTheme } from 'next-themes'
+import { useAuth } from '@/components/providers/AuthProvider'
 
 // Brand colors
 const ACCENT_COLOR = '#00ade8'
@@ -498,12 +499,13 @@ function EmptyState({ onTemplate, onUpload }: { onTemplate: () => void; onUpload
 
 // Document card component
 function DocumentCard({ doc, onDelete }: { doc: Document; onDelete: (id: string) => void }) {
+  const { authFetch } = useAuth()
   const [isDeleting, setIsDeleting] = useState(false)
 
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
-      await fetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
+      await authFetch(`/api/documents/${doc.id}`, { method: 'DELETE' })
       onDelete(doc.id)
     } catch (error) {
       console.error('Failed to delete:', error)
@@ -888,6 +890,7 @@ function TemplateSelector({ onSelect, onClose, customTemplates, onManageTemplate
 
 // Project Modal component
 function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: (project: Project) => void }) {
+  const { authFetch } = useAuth()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [color, setColor] = useState('#00ade8')
@@ -898,7 +901,7 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
     setIsLoading(true)
 
     try {
-      const res = await fetch('/api/projects', {
+      const res = await authFetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description, color })
@@ -1007,6 +1010,7 @@ function ProjectModal({ onClose, onCreated }: { onClose: () => void; onCreated: 
 // Main component
 export default function GhostWriterApp() {
   const { theme, setTheme } = useTheme()
+  const { authFetch } = useAuth()
   
   // State
   const [messages, setMessages] = useState<Message[]>([])
@@ -1038,7 +1042,7 @@ export default function GhostWriterApp() {
   // Fetch projects
   const fetchProjects = useCallback(async () => {
     try {
-      const res = await fetch('/api/projects')
+      const res = await authFetch('/api/projects')
       const data = await res.json()
       if (data.success) {
         setProjects(data.projects)
@@ -1056,7 +1060,7 @@ export default function GhostWriterApp() {
   const fetchDocuments = useCallback(async () => {
     try {
       const projectId = currentProject?.id || 'all'
-      const res = await fetch(`/api/documents?type=${activeTab}&projectId=${projectId}`)
+      const res = await authFetch(`/api/documents?type=${activeTab}&projectId=${projectId}`)
       const data = await res.json()
       if (data.success) setDocuments(data.documents)
     } catch (error) {
@@ -1068,7 +1072,7 @@ export default function GhostWriterApp() {
   const fetchSessions = useCallback(async () => {
     try {
       const projectId = currentProject?.id || 'all'
-      const res = await fetch(`/api/chat?projectId=${projectId}`)
+      const res = await authFetch(`/api/chat?projectId=${projectId}`)
       const data = await res.json()
       if (data.success) setSessions(data.sessions)
     } catch (error) {
@@ -1079,7 +1083,7 @@ export default function GhostWriterApp() {
   // Fetch custom templates
   const fetchCustomTemplates = useCallback(async () => {
     try {
-      const res = await fetch('/api/custom-templates')
+      const res = await authFetch('/api/custom-templates')
       const data = await res.json()
       if (data.success) {
         const converted = data.templates.map((t: {
@@ -1109,7 +1113,7 @@ export default function GhostWriterApp() {
   // Load session messages
   const loadSession = useCallback(async (id: string) => {
     try {
-      const res = await fetch(`/api/chat/${id}`)
+      const res = await authFetch(`/api/chat/${id}`)
       const data = await res.json()
       if (data.success) {
         setMessages(data.messages)
@@ -1155,7 +1159,7 @@ export default function GhostWriterApp() {
 
       try {
         setUploadProgress({ progress: 30, filename: file.name })
-        const res = await fetch('/api/documents', { method: 'POST', body: formData })
+        const res = await authFetch('/api/documents', { method: 'POST', body: formData })
         setUploadProgress({ progress: 80, filename: file.name })
         const data = await res.json()
         setUploadProgress({ progress: 100, filename: file.name })
@@ -1229,7 +1233,7 @@ export default function GhostWriterApp() {
     }])
 
     try {
-      const response = await fetch('/api/chat/stream', {
+      const response = await authFetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMessage, sessionId, toneInstruction, projectId: currentProject?.id })
@@ -1312,7 +1316,7 @@ export default function GhostWriterApp() {
     const allIds = [...(msg.styleSources || []), ...(msg.contentSources || [])]
     if (allIds.length > 0) {
       try {
-        const res = await fetch(`/api/documents/chunks?ids=${allIds.join(',')}`)
+        const res = await authFetch(`/api/documents/chunks?ids=${allIds.join(',')}`)
         const data = await res.json()
         if (data.success) {
           setPreviewChunks(data.chunks.map((c: { id: string; content: string }) => ({
@@ -1337,7 +1341,7 @@ export default function GhostWriterApp() {
   // Handle export
   const handleExport = async (msg: Message, format: 'txt' | 'md' | 'html') => {
     try {
-      const res = await fetch('/api/export', {
+      const res = await authFetch('/api/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1372,7 +1376,7 @@ export default function GhostWriterApp() {
   const handleDeleteDoc = (id: string) => setDocuments(prev => prev.filter(d => d.id !== id))
   const handleDeleteSession = async (id: string) => {
     try {
-      await fetch(`/api/chat?sessionId=${id}`, { method: 'DELETE' })
+      await authFetch(`/api/chat?sessionId=${id}`, { method: 'DELETE' })
       setSessions(prev => prev.filter(s => s.id !== id))
       if (sessionId === id) startNewChat()
     } catch (error) {

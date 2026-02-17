@@ -37,6 +37,7 @@ interface AuthContextValue {
   signUp: (email: string, password: string) => Promise<void>
   logout: () => Promise<void>
   getIdToken: () => Promise<string | null>
+  authFetch: (url: string, options?: RequestInit) => Promise<Response>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -120,6 +121,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return user.getIdToken()
   }, [user])
 
+  const authFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
+    const token = user ? await user.getIdToken() : null
+    const headers = new Headers(options.headers)
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    }
+    return fetch(url, { ...options, headers })
+  }, [user])
+
   return (
     <AuthContext.Provider
       value={{
@@ -130,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUp,
         logout,
         getIdToken,
+        authFetch,
       }}
     >
       {children}
