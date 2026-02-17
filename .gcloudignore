@@ -1,0 +1,34 @@
+# .gcloudignore - controls what gcloud uploads to Cloud Build
+# Based on .gitignore but explicitly allows .env.production
+
+# Dependencies
+node_modules/
+
+# Next.js build
+.next/
+out/
+
+# Git
+.git/
+
+# Env files (secrets)
+.env
+.env.local
+.env.development.local
+.env.test.local
+
+# ALLOW .env.production (public Firebase config, needed at build time)
+!.env.production
+
+# IDE
+.vscode/
+
+# Logs
+*.log
+
+# Agent config (not needed in container)
+.agent/
+
+# Misc
+test/
+local-*
