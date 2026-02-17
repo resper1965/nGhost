@@ -9,7 +9,6 @@ import { NextRequest, NextResponse } from 'next/server'
 const PUBLIC_PATHS = [
   '/auth/signin',
   '/auth/error',
-  '/landing',
   '/api/auth',     // Keep for any legacy callbacks
   '/_next',
   '/favicon.ico',
@@ -18,26 +17,21 @@ const PUBLIC_PATHS = [
 ]
 
 function isPublicPath(pathname: string): boolean {
+  // Root "/" is public (landing page)
+  if (pathname === '/') return true
   return PUBLIC_PATHS.some((path) => pathname.startsWith(path))
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow public paths
+  // Allow public paths (including root landing page)
   if (isPublicPath(pathname)) {
     return NextResponse.next()
   }
 
   // Check for session cookie
   const sessionCookie = request.cookies.get('__session')
-
-  // Root path: redirect to landing page if not authenticated
-  if (pathname === '/') {
-    if (!sessionCookie?.value) {
-      return NextResponse.redirect(new URL('/landing', request.url))
-    }
-  }
 
   if (!sessionCookie?.value) {
     // No session — redirect to sign in

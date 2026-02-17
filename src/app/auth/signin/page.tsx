@@ -32,7 +32,7 @@ export default function SignInPage() {
       } else {
         await signInWithEmail(email, password)
       }
-      router.push('/')
+      router.push('/app')
     } catch (err: unknown) {
       const firebaseError = err as { code?: string; message?: string }
       const errorMessages: Record<string, string> = {
@@ -55,7 +55,7 @@ export default function SignInPage() {
     setLoading(true)
     try {
       await signInWithGoogle()
-      router.push('/')
+      router.push('/app')
     } catch (err: unknown) {
       const firebaseError = err as { code?: string; message?: string }
       if (firebaseError.code !== 'auth/popup-closed-by-user') {
