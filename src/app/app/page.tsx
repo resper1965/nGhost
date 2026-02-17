@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, BookOpen, Feather, Loader2, FileText,
@@ -12,7 +13,7 @@ import {
   Menu, Settings, Moon, Sun, Search, Filter, Grid,
   List, MoreVertical, Heart, Share2, Bookmark, Clock,
   TrendingUp, Award, Target, Lightbulb, Star, Globe, Lock, Edit2, Save,
-  PanelLeftClose, PanelLeft, ChevronRight, Wand2, FilePlus, FolderOpen, FolderPlus, Briefcase
+  PanelLeftClose, PanelLeft, ChevronRight, Wand2, FilePlus, FolderOpen, FolderPlus, Briefcase, LogOut, ChevronUp
 } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Button } from '@/components/ui/button'
@@ -581,6 +582,78 @@ function SessionCard({ session, isActive, onClick, onDelete }: { session: ChatSe
   )
 }
 
+// User footer component
+function UserFooter() {
+  const { user, logout } = useAuth()
+  const [showMenu, setShowMenu] = useState(false)
+  const router = useRouter()
+
+  if (!user) return null
+
+  const displayName = user.displayName || user.email?.split('@')[0] || 'Usuário'
+  const email = user.email || ''
+  const initial = displayName.charAt(0).toUpperCase()
+
+  const handleLogout = async () => {
+    await logout()
+    router.push('/auth/signin')
+  }
+
+  return (
+    <div className="mt-auto border-t border-border relative">
+      <button
+        onClick={() => setShowMenu(!showMenu)}
+        className="w-full flex items-center gap-3 p-3 sm:p-4 hover:bg-muted/50 transition-colors cursor-pointer group"
+      >
+        {user.photoURL ? (
+          <img
+            src={user.photoURL}
+            alt={displayName}
+            className="w-8 h-8 rounded-full object-cover shrink-0"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div
+            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+            style={{ background: ACCENT_GRADIENT }}
+          >
+            {initial}
+          </div>
+        )}
+        <div className="flex-1 min-w-0 text-left">
+          <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
+          <p className="text-[10px] text-muted-foreground truncate">{email}</p>
+        </div>
+        <ChevronUp className={cn(
+          'w-4 h-4 text-muted-foreground transition-transform shrink-0',
+          showMenu && 'rotate-180'
+        )} />
+      </button>
+
+      {/* Logout dropdown */}
+      <AnimatePresence>
+        {showMenu && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.15 }}
+            className="absolute bottom-full left-2 right-2 mb-1 bg-card border border-border rounded-lg shadow-lg overflow-hidden z-50"
+          >
+            <button
+              onClick={handleLogout}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair da conta
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 // Sidebar content component (shared between desktop sidebar and mobile sheet)
 function SidebarContent({ 
   documents, 
@@ -788,6 +861,9 @@ function SidebarContent({
           </div>
         </ScrollArea>
       </div>
+
+      {/* User Footer */}
+      <UserFooter />
     </div>
   )
 }
